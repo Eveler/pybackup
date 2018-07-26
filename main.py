@@ -154,14 +154,15 @@ def update():
                                       errorlevel=0) as arc:
                         try:
                             member = arc.next()
-                            if member is not None:
+                            if member is None:
                                 arc.close()
+                                logging.warning(incpath + ' is empty. Removing.')
                                 remove(incpath)
                                 break
                         except IOError as e:
-                            logging.warn('IOError: ' + e.message, exc_info=True)
+                            logging.warning('IOError: ' + e.message, exc_info=True)
                 except TarError as e:
-                    logging.warning('TarError: ' + e.message, exc_inf=True)
+                    logging.warning('TarError: ' + e.message + '. Removing ' + incpath + '.', exc_info=True)
                     remove(incpath)
                     break
             n += 1
