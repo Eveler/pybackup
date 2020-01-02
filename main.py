@@ -1,5 +1,8 @@
 #!/bin/env python
 # -*- coding: utf-8 -*-
+# import sys
+# if sys.version_info[0] > 2:
+#     unicode = str
 import gzip
 import logging
 from datetime import datetime
@@ -18,9 +21,7 @@ incpath = ""
 delete_postfix = '_delete.lst.gz'
 updated_postfix = '_updated.lst.gz'
 
-logging.basicConfig(level=logging.DEBUG,
-                    format="%(asctime)-15s %(levelname)s [%(lineno)d] "
-                           "%(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)-15s %(levelname)s [%(lineno)d] %(message)s")
 
 
 def create():
@@ -32,36 +33,30 @@ def create():
     lst_name = path.join(dir_path, basename + '.lst.gz')
     if path.exists(lst_name):
         remove(lst_name)
-    with TarFile.open(args.dst, 'w:gz', encoding='utf8',
-                      ignore_zeros=True) as arc:
+    with TarFile.open(args.dst, 'w:gz', ignore_zeros=True, encoding='mbcs', errors='utf-8') as arc,\
+        gzip.open(lst_name, 'a') as f:
         for dirpath, dirnames, filenames in walk(args.src):
             for filename in filenames:
-                try:
-                    fn = path.join(dirpath.decode('cp1251', errors='replace'),
-                                   filename.decode('cp1251', errors='replace'))
-                except UnicodeEncodeError:
-                    fn = path.join(dirpath, filename)
+                fn = path.join(dirpath, filename)
 
                 try:
                     arc.add(fn)
-                    with gzip.open(lst_name, 'a') as f:
-                        f.write(fn[3:].replace('\\', '/').encode(
-                            'utf8', errors='replace'))
-                        f.write('\t' + str(int(path.getmtime(fn))) + '\t' +
-                                str(int(path.getsize(fn))) + '\n')
+                    f.write(fn[3:].replace('\\', '/').encode('utf8', errors='replace'))
+                    # if sys.version_info[0] > 2:
+                    #     f.write(bytes('\t' + str(int(path.getmtime(fn))) + '\t' + str(int(path.getsize(fn))) + '\n',
+                    #                   'utf8'))
+                    # else:
+                    f.write('\t' + str(int(path.getmtime(fn))) + '\t' + str(int(path.getsize(fn))) + '\n')
                     logging.info(fn[3:] + ' added')
                 except CompressionError as e:
-                    logging.warn(fn + ': CompressionError: ' + e.message,
-                                 exc_info=True)
+                    logging.warning(fn + ': CompressionError: ' + str(e), exc_info=True)
                 except StreamError as e:
-                    logging.warn(fn + ': StreamError: ' + e.message,
-                                 exc_info=True)
+                    logging.warning(fn + ': StreamError: ' + str(e), exc_info=True)
                 except UnicodeEncodeError as e:
-                    logging.warn(fn + ': UnicodeEncodeError: ' + e.message,
-                                 exc_info=True)
+                    logging.warning(fn + ': UnicodeEncodeError: ' + str(e), exc_info=True)
                 except Exception as e:
-                    logging.warn(fn + ': ', exc_info=True)
-                    logging.warn('Exception: ' + e.message)
+                    logging.warning(fn + ': ', exc_info=True)
+                    logging.warning('Exception: ' + str(e))
 
         logging.info("Done.")
 
@@ -79,66 +74,71 @@ def update():
         logging.info("Collect backed up files info")
         backed = {}
         if not path.exists(lst_name):
-            with TarFile.open(args.dst, 'r', ignore_zeros=True,
-                              errorlevel=0) as arc:
+            with TarFile.open(args.dst, 'r', ignore_zeros=True, errorlevel=0, encoding='mbcs', errors='utf-8') as arc:
                 try:
                     member = arc.next()
                     while member is not None:
                         try:
-                            fn = member.name.decode('utf8', errors='replace')
+                            # if sys.version_info[0] > 2:
+                            #     fn = member.name + u''
+                            # else:
+                            fn = member.name.decode('cp1251', errors='replace')
                             backed[fn] = member
                             with gzip.open(lst_name, 'a') as f:
                                 f.write(fn.encode('utf8', errors='replace'))
-                                f.write('\t' + str(member.mtime) + '\t' +
-                                        str(member.size) + '\n')
+                                # if sys.version_info[0] > 2:
+                                #     f.write(bytes('\t' + str(member.mtime) + '\t' + str(member.size) + '\n', 'utf8'))
+                                # else:
+                                f.write('\t' + str(member.mtime) + '\t' + str(member.size) + '\n')
                         except UnicodeEncodeError as e:
-                            logging.warn('UnicodeEncodeError: ' + e.message,
-                                         exc_info=True)
+                            logging.warning('UnicodeEncodeError: ' + str(e), exc_info=True)
                         member = arc.next()
                 except IOError as e:
-                    logging.warn('IOError: ' + e.message, exc_info=True)
+                    logging.warning('IOError: ' + str(e), exc_info=True)
 
             n = 1
             incpath = abspath.replace(basename, basename + '_inc%s' % n)
             while path.exists(incpath):
-                with TarFile.open(incpath, 'r', ignore_zeros=True,
-                                  errorlevel=0) as arc:
+                with TarFile.open(incpath, 'r', ignore_zeros=True, errorlevel=0, encoding='mbcs', errors='utf-8') as arc:
                     try:
                         member = arc.next()
                         while member is not None:
                             try:
-                                fn = member.name.decode('utf8',
-                                                        errors='replace')
+                                # if sys.version_info[0] > 2:
+                                #     fn = member.name
+                                # else:
+                                fn = member.name.decode('utf8', errors='replace')
                                 if fn not in backed:
                                     backed[fn] = member
                                     with gzip.open(lst_name, 'a') as f:
-                                        f.write(fn.encode('utf8',
-                                                          errors='replace'))
-                                        f.write('\t' + str(member.mtime) +
-                                                '\t' + str(member.size) + '\n')
+                                        f.write(fn.encode('utf8', errors='replace'))
+                                        # if sys.version_info[0] > 2:
+                                        #     f.write(bytes('\t' + str(member.mtime) + '\t' + str(member.size) + '\n',
+                                        #                   'utf8'))
+                                        # else:
+                                        f.write('\t' + str(member.mtime) + '\t' + str(member.size) + '\n')
                             except UnicodeEncodeError as e:
-                                logging.warn('UnicodeEncodeError: ' + e.message,
-                                             exc_info=True)
+                                logging.warning('UnicodeEncodeError: ' + str(e), exc_info=True)
                             member = arc.next()
                     except IOError as e:
-                        logging.warn('IOError: ' + e.message, exc_info=True)
+                        logging.warning('IOError: ' + str(e), exc_info=True)
 
                 n += 1
                 incpath = abspath.replace(basename, basename + '_inc%s' % n)
         else:
             with gzip.open(lst_name, 'r') as f:
                 for line in f:
-                    fn = ''
+                    fn = b''
                     mtime = fsize = 0
-                    v = line.split('\t')
+                    v = line.split(b'\t')
                     if len(v) > 2:
                         fn, mtime, fsize = v
-                        fsize = fsize.replace('\r', '')
-                        fsize = fsize.replace('\n', '')
+                        fsize = fsize.replace(b'\r', b'')
+                        fsize = fsize.replace(b'\n', b'')
                     else:
                         fn, mtime = v
-                    mtime = mtime.replace('\r', '')
-                    mtime = mtime.replace('\n', '')
+                    mtime = mtime.replace(b'\r', b'')
+                    mtime = mtime.replace(b'\n', b'')
                     fn = unicode(fn, 'utf8')
                     info = TarInfo(fn)
                     info.mtime = int(mtime)
@@ -150,8 +150,7 @@ def update():
         while path.exists(incpath):
             if path.getsize(incpath) < 2048:
                 try:
-                    with TarFile.open(incpath, 'r', ignore_zeros=True,
-                                      errorlevel=0) as arc:
+                    with TarFile.open(incpath, 'r', ignore_zeros=True, errorlevel=0, encoding='mbcs', errors='utf-8') as arc:
                         try:
                             member = arc.next()
                             if member is None:
@@ -160,9 +159,9 @@ def update():
                                 remove(incpath)
                                 break
                         except IOError as e:
-                            logging.warning('IOError: ' + e.message, exc_info=True)
+                            logging.warning('IOError: ' + str(e), exc_info=True)
                 except TarError as e:
-                    logging.warning('TarError: ' + e.message + '. Removing ' + incpath + '.', exc_info=True)
+                    logging.warning('TarError: ' + str(e) + '. Removing ' + incpath + '.')
                     remove(incpath)
                     break
             n += 1
@@ -173,18 +172,13 @@ def update():
 
         exception_thrown = False
         added_count = 0
-        with TarFile.open(incpath, 'w:gz', encoding='utf8',
-                          ignore_zeros=True) as arc:
+        with TarFile.open(incpath, 'w:gz', ignore_zeros=True, encoding='mbcs', errors='utf-8') as arc,\
+            gzip.open(lst_name, 'a') as lst:
             for dirpath, dirnames, filenames in walk(args.src):
                 if exception_thrown:
                     break
                 for filename in filenames:
-                    try:
-                        fn = path.join(
-                            dirpath.decode('cp1251', errors='replace'),
-                            filename.decode('cp1251', errors='replace'))
-                    except UnicodeEncodeError:
-                        fn = path.join(dirpath, filename)
+                    fn = path.join(dirpath, filename)
                     op = ' added'
                     key = fn[3:].replace('\\', '/')
                     if key in backed:
@@ -198,32 +192,28 @@ def update():
                     try:
                         arc.add(fn)
                         added_count += 1
-                        with gzip.open(lst_name, 'a') as f:
-                            f.write(key.encode('utf8', errors='replace'))
-                            f.write('\t' + str(int(path.getmtime(fn))) + '\t' +
-                                    str(int(path.getsize(fn))) + '\n')
+                        lst.write(key.encode('utf8', errors='replace'))
+                        # if sys.version_info[0] > 2:
+                        #     lst.write(bytes('\t' + str(int(path.getmtime(fn))) + '\t' + str(path.getsize(fn)) + '\n',
+                        #                     'utf8'))
+                        # else:
+                        lst.write('\t' + str(int(path.getmtime(fn))) + '\t' + str(path.getsize(fn)) + '\n',)
                         if op == ' updated':
                             with gzip.open(updatedlst, 'a') as u:
-                                u.write(
-                                    key.encode('utf8', errors='replace') + '\n')
+                                u.write(key.encode('utf8', errors='replace') + b'\n')
                         logging.info(fn[3:] + op)
                     except CompressionError as e:
-                        logging.warn(fn + ': CompressionError: ' + e.message,
-                                     exc_info=True)
+                        logging.warning(fn + ': CompressionError: ' + str(e), exc_info=True)
                     except StreamError as e:
-                        logging.warn(fn + ': StreamError: ' + e.message,
-                                     exc_info=True)
+                        logging.warning(fn + ': StreamError: ' + str(e), exc_info=True)
                     except UnicodeEncodeError as e:
-                        logging.warn(fn + ': UnicodeEncodeError: ' + e.message,
-                                     exc_info=True)
+                        logging.warning(fn + ': UnicodeEncodeError: ' + str(e), exc_info=True)
                     except IOError as e:
-                        logging.warn(fn + ': IOError: ' + e.message,
-                                     exc_info=True)
+                        logging.warning(fn + ': IOError: ' + str(e), exc_info=True)
                         exception_thrown = True
                         break
                     except Exception as e:
-                        logging.warn(fn + ': Exception: ' + e.message,
-                                     exc_info=True)
+                        logging.warning(fn + ': Exception: ' + str(e), exc_info=True)
 
         # Remove backup file if no files added
         if not added_count:
@@ -235,9 +225,9 @@ def update():
                 for k in backed.keys():
                     try:
                         dl.write(k.encode('utf8', errors='replace'))
-                        dl.write('\n')
+                        dl.write(b'\n')
                     except Exception as e:
-                        logging.warn(e.message, exc_info=True)
+                        logging.warning(str(e), exc_info=True)
         if exception_thrown:
             return exception_thrown
         else:
@@ -351,8 +341,12 @@ if __name__ == '__main__':
             dpath = path.join(dir_path, basename + delete_postfix)
             count = dcount = 0
             if path.exists(dpath):
-                with gzip.open(dpath, 'r') as f:
-                    dcount = len(f.readlines())
+                try:
+                    with gzip.open(dpath, 'r') as f:
+                        dcount = len(f.readlines())
+                except gzip.BadGzipFile as e:
+                    logging.warning('Error loading deleted files list: ' + str(e), exc_info=True)
+                    remove(dpath)
             upath = path.join(dir_path, basename + updated_postfix)
             if path.exists(upath):
                 with gzip.open(upath, 'r') as f:
@@ -365,17 +359,19 @@ if __name__ == '__main__':
                     n = 1
                     incpath = abspath.replace(basename, basename + '_inc%s' % n)
                     while path.exists(incpath):
+                        remove(incpath)
                         n += 1
                         incpath = abspath.replace(
                             basename, basename + '_inc%s' % n)
-                        remove(incpath)
+                    if path.exists(dpath):
+                        remove(dpath)
                     create()
                 else:
                     done = update()
             else:
                 done = update()
         else:
-            logging.warn('Wrong command. Just updating.')
+            logging.warning('Wrong command. Just updating.')
             done = update()
 
         if not done:
